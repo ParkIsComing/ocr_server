@@ -1,26 +1,50 @@
 from typing import Literal
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Blueprint
 from flask_cors import CORS
 
 import easydict
+import uuid
+import boto3
+import os
+from werkzeug.utils import secure_filename
 
 from demo import demo
+from config import AWS_ACCESS_KEY, AWS_SECRET_KEY, BUCKET_NAME
+
 
 app = Flask(__name__)
+CORS(app)
+
+app_route = Blueprint('ocr_route',__name__)
+
+
+S3_LOCATION = f"http://{BUCKET_NAME}.s3.amazonaws.com/"
+
+
 
 @app.route('/')
 def home_page():
     return "ocr server"
 
-@app.route('/ocr', methods=['POST'])
+@app.route('/api/ocr', methods=['POST'])
 def ocr_from_image():
+
+    image = request.files['image']
+    user_id = request.form['id']
+
+    # s3 업로드
+    s3_url = upload_image(image, user_id)
+
+    # 이미지 폴더 저장
+    path, ext = os.path.splitext(image.filename)
+    image.save('./uploads/ocr' + ext) # 파일명을 보호하기위한 함수, 지정된 경로에 파일 저장
 
     args = easydict.EasyDict({
         "Transformation" : "TPS",
         "FeatureExtraction" : "ResNet",
         "SequenceModeling" : "BiLSTM",
         "Prediction" : "CTC",
-        "image_folder" : "./static/images/",
+        "image_folder" : "./uploads/",
         "saved_model" : "./best_accuracy.pth",
         "workers" : 0,
         "batch_size" : 192,
@@ -36,8 +60,50 @@ def ocr_from_image():
         "output_channel" : 512,
         "hidden_size" : 256
     })
-    
+
     result = demo(args)
+
+    # 폴더에서 파일 삭제
+    os.remove('./uploads/ocr' + ext)
     
-    # return uuid
-    return jsonify({"result" : result})
+    data = {
+        "user_id" : user_id,
+        "s3_url" : s3_url,
+        "result" : result
+    }
+
+    return jsonify(data)
+
+
+def upload_image(image, user_id):
+    try:
+        
+        # filename = secure_filename(image.filename)
+        image.filename = get_unique_imgname(image.filename, user_id)
+    
+        s3 = s3_connection()
+        s3.put_object(Bucket=BUCKET_NAME, Body=image, Key=image.filename)
+    except Exception as e:
+        return jsonify({'errors' : str(e)})
+    
+    url = f"{S3_LOCATION}{image.filename}"
+    
+    # return jsonify({'url': url})
+    return url
+    
+
+def get_unique_imgname(filename, user_id):
+    ext = filename.rsplit(".",1)[1].lower()
+    # 이미지 파일명 구조 : {userid}/{uuid}.{확장자} 
+    # 이미지의 원래 이름에 s3 파일이름에 들어갈 수 없는 문자가 있을 경우를 고려하여 일단 uuid만 넣었음
+    return f"{user_id}/{uuid.uuid4().hex}.{ext}"  
+
+
+def s3_connection():
+    s3 = boto3.client('s3',aws_access_key_id = AWS_ACCESS_KEY, aws_secret_access_key = AWS_SECRET_KEY)
+    return s3
+
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', debug=True)

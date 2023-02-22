@@ -308,6 +308,7 @@ poetry.toml
 .history
 .ionide
 
-best_accuracy.pth
+flask/route/best_accuracy.pth
+flask/route/config.py
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,python,flask,macos

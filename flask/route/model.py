@@ -16,10 +16,10 @@ limitations under the License.
 
 import torch.nn as nn
 
-from transformation import TPS_SpatialTransformerNetwork
-from feature_extraction import VGG_FeatureExtractor, RCNN_FeatureExtractor, ResNet_FeatureExtractor
-from sequence_modeling import BidirectionalLSTM
-from prediction import Attention
+from route.transformation import TPS_SpatialTransformerNetwork
+from route.feature_extraction import VGG_FeatureExtractor, RCNN_FeatureExtractor, ResNet_FeatureExtractor
+from route.sequence_modeling import BidirectionalLSTM
+from route.prediction import Attention
 
 
 class Model(nn.Module):

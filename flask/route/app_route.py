@@ -1,19 +1,22 @@
 from typing import Literal
-from flask import Flask, request, jsonify, Blueprint
+from flask import Flask, request, Blueprint
 from flask_cors import CORS
 
 import easydict
 import uuid
 import boto3
+import logging
 import os
+from botocore.exceptions import ClientError
 from werkzeug.utils import secure_filename
+from PIL import Image
 
-from demo import demo
-from config import AWS_ACCESS_KEY, AWS_SECRET_KEY, BUCKET_NAME
+from route.demo import demo
+from route.config import AWS_ACCESS_KEY, AWS_SECRET_KEY, BUCKET_NAME
 
 
-app = Flask(__name__)
-CORS(app)
+app_route = Flask(__name__)
+CORS(app_route)
 
 app_route = Blueprint('ocr_route',__name__)
 
@@ -22,30 +25,34 @@ S3_LOCATION = f"http://{BUCKET_NAME}.s3.amazonaws.com/"
 
 
 
-@app.route('/')
+@app_route.route('/')
 def home_page():
-    return "ocr server"
+    return os.path.realpath(__file__)
+     
 
-@app.route('/api/ocr', methods=['POST'])
+@app_route.route('/api/ocr', methods=['POST'])
 def ocr_from_image():
 
     image = request.files['image']
     user_id = request.form['id']
 
-    # s3 업로드
-    s3_url = upload_image(image, user_id)
-
     # 이미지 폴더 저장
+    im = Image.open(image)
     path, ext = os.path.splitext(image.filename)
-    image.save('./uploads/ocr' + ext) # 파일명을 보호하기위한 함수, 지정된 경로에 파일 저장
+    imgpath = f'route/uploads/ocr_image{ext}'
+    im.save(imgpath) # 파일명을 보호하기위한 함수, 지정된 경로에 파일 저장
+
+    # s3 업로드
+    s3_url = upload_image(image, imgpath, user_id)
+
 
     args = easydict.EasyDict({
         "Transformation" : "TPS",
         "FeatureExtraction" : "ResNet",
         "SequenceModeling" : "BiLSTM",
         "Prediction" : "CTC",
-        "image_folder" : "./uploads/",
-        "saved_model" : "./best_accuracy.pth",
+        "image_folder" : "route/uploads/",
+        "saved_model" : "route/best_accuracy.pth",
         "workers" : 0,
         "batch_size" : 192,
         "batch_max_length" : 25,
@@ -64,31 +71,30 @@ def ocr_from_image():
     result = demo(args)
 
     # 폴더에서 파일 삭제
-    os.remove('./uploads/ocr' + ext)
-    
-    data = {
-        "user_id" : user_id,
-        "s3_url" : s3_url,
-        "result" : result
-    }
+    os.remove(f'route/uploads/ocr_image{ext}')
 
-    return jsonify(data)
+    return {"user_id" : user_id, "s3_url" : s3_url, "result" : result}
 
 
-def upload_image(image, user_id):
+
+def upload_image(image, imgpath, user_id):
     try:
         
         # filename = secure_filename(image.filename)
         image.filename = get_unique_imgname(image.filename, user_id)
     
         s3 = s3_connection()
-        s3.put_object(Bucket=BUCKET_NAME, Body=image, Key=image.filename)
-    except Exception as e:
-        return jsonify({'errors' : str(e)})
+        # s3.put_object(Bucket=BUCKET_NAME, Body=image, Key=image.filename)
+        s3.upload_file(imgpath, BUCKET_NAME, image.filename,ExtraArgs={
+                "ACL": "public-read",
+                "ContentType": image.content_type
+            } )
+    except ClientError as e:
+        logging.error(e)
+        return None
     
     url = f"{S3_LOCATION}{image.filename}"
     
-    # return jsonify({'url': url})
     return url
     
 
@@ -105,5 +111,5 @@ def s3_connection():
 
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=True)
+# if __name__ == '__main__':
+#     app_route.run(host='0.0.0.0', debug=True)

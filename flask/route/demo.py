@@ -6,9 +6,9 @@ import torch.backends.cudnn as cudnn
 import torch.utils.data
 import torch.nn.functional as F
 
-from utils import CTCLabelConverter, AttnLabelConverter
-from dataset import RawDataset, AlignCollate
-from model import Model
+from route.utils import CTCLabelConverter, AttnLabelConverter
+from route.dataset import RawDataset, AlignCollate
+from route.model import Model
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

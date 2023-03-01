@@ -8,11 +8,29 @@ services:
         environment:
             - APP_NAME=OCRSERVER
         expose:
-            - 5000
-
+            - "5000"
+        deploy:
+            resources:
+                limits:
+                    cpus: '0.50'
+                    memory: 512M
+                reservations:
+                    cpus: '0.25'
+                    memory: 128M
+        image: gayeongpark/midubang_flask
     nginx:
         build: ./nginx
         container_name: nginx
         restart: always
         ports:
             - "80:80"
+        deploy:
+            resources:
+                limits:
+                    cpus: '0.50'
+                    memory: 512M
+                reservations:
+                    cpus: '0.25'
+                    memory: 128M
+        image: gayeongpark/midubang_nginx
+

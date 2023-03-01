@@ -17,7 +17,6 @@ services:
             reservations:
                 cpus: '0.25'
                 memory: 128M
-    image: gayeongpark/midubang_nginx
     depends_on:
     #   - web
       - flask
